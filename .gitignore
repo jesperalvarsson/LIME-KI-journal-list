@@ -1,0 +1,6 @@
+# Extracted from dist/ by tests/extract.js on each test run.
+tests/page.js
+
+__pycache__/
+*.pyc
+.DS_Store

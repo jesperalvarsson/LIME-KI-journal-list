@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FBFAFC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14111A" media="(prefers-color-scheme: dark)">
+<title>KI Journal List &mdash; level lookup</title>
+<meta name="description" content="Look up any journal in the Karolinska Institutet Journal List (KI-JL) 2026 and see its level: 3, 2, 1 or 0.">
+<script>
+/* Applied before first paint so a dark-mode reader never sees a white flash. */
+(function(){var d=document.documentElement,k="kijl-theme";
+try{var t=localStorage.getItem(k);if(t==="dark"||t==="light")d.setAttribute("data-theme",t)}catch(e){}})();
+</script>
+<style>:root[data-theme="light"]{color-scheme:light}:root[data-theme="dark"]{color-scheme:dark}
+:root{color-scheme:light dark}body{margin:0}[hidden]{display:none!important}</style>
+<style>
+/* THEME. Same palette as the NASP journal finder, so the two tools read as a
+   pair: plum #412653, orchid #D274D2, vermilion #E1563F. The shell is
+   near-neutral and the colour is spent only on the level verdict and on things
+   you can act on. Every pairing is checked to WCAG AA by tests/contrast.py. */
+{{FONT}}
+:root{
+  --bg:#FBFAFC; --surface:#FFFFFF; --surface-2:#F4F1F7; --surface-3:#E8E3EE;
+  --border:#E5E0EB; --border-strong:#8E8399;
+  --text:#211A2B; --head:#2E1D3D; --dim:#564C63; --faint:#6B6175;
+  --accent:#8F4C92; --accent-2:#C64B36; --accent-soft:#F7EAF8; --on-accent:#FFFFFF;
+  /* The four levels are a heat scale: filled plum, filled vermilion, a plum
+     tint, then a red-tinted neutral for 0, which is a warning and not a rank. */
+  --l3:#412653; --l2:#C64B36; --l1:#F2E2F4; --l0:#FBE4DF;
+  --l3-ink:#FFFFFF; --l2-ink:#FFFFFF; --l1-ink:#6B3A70; --l0-ink:#8E3322;
+  --good:#2C7A5E; --warn:#C64B36; --bad:#B33F2C;
+  --shadow:0 1px 2px rgba(33,26,43,.05), 0 10px 30px -18px rgba(33,26,43,.22);
+}
+:root[data-theme="dark"]{
+  --bg:#14111A; --surface:#1B1724; --surface-2:#231E2E; --surface-3:#2D2739;
+  --border:#332C40; --border-strong:#70678A;
+  --text:#EBE7F0; --head:#F5F1F8; --dim:#B7AFC4; --faint:#9A91A8;
+  --accent:#D989D9; --accent-2:#F0907A; --accent-soft:#2D1F36; --on-accent:#1A121F;
+  --l3:#D274D2; --l2:#E87A60; --l1:#3B2F47; --l0:#4A2A25;
+  --l3-ink:#1A0F1D; --l2-ink:#1F0C06; --l1-ink:#DCC6E4; --l0-ink:#F2B3A4;
+  --good:#5BC49A; --warn:#F0907A; --bad:#F0806E;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px -20px rgba(0,0,0,.85);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14111A; --surface:#1B1724; --surface-2:#231E2E; --surface-3:#2D2739;
+  --border:#332C40; --border-strong:#70678A;
+  --text:#EBE7F0; --head:#F5F1F8; --dim:#B7AFC4; --faint:#9A91A8;
+  --accent:#D989D9; --accent-2:#F0907A; --accent-soft:#2D1F36; --on-accent:#1A121F;
+  --l3:#D274D2; --l2:#E87A60; --l1:#3B2F47; --l0:#4A2A25;
+  --l3-ink:#1A0F1D; --l2-ink:#1F0C06; --l1-ink:#DCC6E4; --l0-ink:#F2B3A4;
+  --good:#5BC49A; --warn:#F0907A; --bad:#F0806E;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 12px 32px -20px rgba(0,0,0,.85);
+}}
+/* Light type on a dark ground reads optically thinner. A little tracking and
+   grayscale smoothing corrects it without changing the face or reflowing. */
+:root[data-theme="dark"] body{letter-spacing:.012em; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) body{letter-spacing:.012em; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale}}
+
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--text); font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:16px; line-height:1.5; margin:0}
+/* The one place the whole palette appears together. */
+body::before{content:""; position:fixed; inset:0 0 auto 0; height:3px; z-index:20;
+  background:linear-gradient(90deg,#412653 0%, #8F4C92 20%, #D274D2 46%, #E1563F 76%, #D9962F 100%)}
+.wrap{max-width:760px; margin:0 auto; padding:34px 20px 80px}
+a{color:var(--accent)}
+h1{font-size:23px; line-height:1.25; margin:0; color:var(--head); font-weight:600; letter-spacing:-.01em}
+.sub{color:var(--dim); font-size:14px; margin:6px 0 0}
+.top{display:flex; align-items:flex-start; gap:16px; justify-content:space-between; margin-bottom:26px}
+.btn{font:inherit; font-size:13px; padding:7px 12px; border-radius:8px; cursor:pointer;
+  background:var(--surface); color:var(--text); border:1px solid var(--border); white-space:nowrap}
+.btn:hover{border-color:var(--border-strong)}
+.btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+
+/* Search ------------------------------------------------------------------ */
+.search{position:relative}
+#q{width:100%; font:inherit; font-size:19px; padding:16px 44px 16px 16px; border-radius:12px;
+  background:var(--surface); color:var(--text); border:1px solid var(--border-strong); box-shadow:var(--shadow)}
+#q::placeholder{color:var(--faint)}
+#q:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent)}
+#clr{position:absolute; right:8px; top:50%; transform:translateY(-50%); border:0; background:transparent;
+  color:var(--faint); font:inherit; font-size:20px; line-height:1; cursor:pointer; padding:8px; border-radius:8px}
+#clr:hover{color:var(--text)}
+#clr:focus-visible{outline:2px solid var(--accent)}
+.hint{color:var(--faint); font-size:13px; margin:9px 2px 0}
+
+/* Verdict ----------------------------------------------------------------- */
+.card{background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  padding:20px; margin-top:18px; box-shadow:var(--shadow)}
+.verdict{display:flex; gap:18px; align-items:flex-start}
+.badge{flex:none; width:74px; height:74px; border-radius:14px; display:grid; place-items:center;
+  font-size:40px; font-weight:700; line-height:1; letter-spacing:-.02em}
+.badge.n{font-size:15px; font-weight:600; letter-spacing:0; text-align:center; padding:6px}
+.lv3{background:var(--l3); color:var(--l3-ink)} .lv2{background:var(--l2); color:var(--l2-ink)}
+.lv1{background:var(--l1); color:var(--l1-ink)} .lv0{background:var(--l0); color:var(--l0-ink)}
+.lvx{background:var(--surface-3); color:var(--dim)}
+.vtitle{font-size:20px; font-weight:600; color:var(--head); margin:0 0 3px; line-height:1.3}
+.vmean{margin:0; color:var(--text)}
+.vmean b{color:var(--head)}
+.meta{color:var(--faint); font-size:13px; margin:10px 0 0; font-variant-numeric:tabular-nums}
+.note{margin:14px 0 0; padding:12px 14px; border-radius:10px; font-size:14px;
+  background:var(--surface-2); color:var(--dim); border-left:3px solid var(--border-strong)}
+.note.warn{border-left-color:var(--accent-2); color:var(--text)}
+.note b{color:var(--head)}
+
+/* Result list ------------------------------------------------------------- */
+.count{color:var(--faint); font-size:13px; margin:20px 2px 8px}
+ul.res{list-style:none; margin:0; padding:0; border:1px solid var(--border); border-radius:12px;
+  overflow:hidden; background:var(--surface)}
+ul.res li + li{border-top:1px solid var(--border)}
+.row{display:flex; width:100%; gap:14px; align-items:center; text-align:left; font:inherit;
+  background:transparent; border:0; color:inherit; padding:12px 15px; cursor:pointer}
+.row:hover{background:var(--surface-2)}
+.row:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
+.row[aria-current="true"]{background:var(--accent-soft)}
+input[type=search]::-webkit-search-cancel-button,
+input[type=search]::-webkit-search-decoration{-webkit-appearance:none;appearance:none}
+.badge.amb{background:var(--surface-3);color:var(--dim);border:2px solid var(--border-strong)}
+.split .lead{margin:.25rem 0 0}
+.split .verdict>div{min-width:0}
+.res.tied{margin-top:.9rem}
+.res.tied .row{cursor:default;width:100%}
+.res.tied .row:hover{background:transparent}
+.chip{flex:none; width:34px; height:34px; border-radius:8px; display:grid; place-items:center;
+  font-weight:700; font-size:16px}
+.rt{flex:1 1 auto; min-width:0}
+.rt .t{display:block; color:var(--head); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.rt .i{display:block; color:var(--faint); font-size:12px; font-variant-numeric:tabular-nums}
+
+/* Legend and footer ------------------------------------------------------- */
+.legend{margin-top:26px}
+.legend h2{font-size:14px; color:var(--head); margin:0 0 10px; font-weight:600}
+.lg{display:flex; gap:11px; align-items:baseline; padding:7px 0}
+.lg + .lg{border-top:1px solid var(--border)}
+.lg .chip{width:26px; height:26px; font-size:13px; border-radius:7px; align-self:center}
+.lg span{color:var(--dim); font-size:14px}
+.lg b{color:var(--head); font-weight:600}
+footer{margin-top:34px; padding-top:18px; border-top:1px solid var(--border); color:var(--faint); font-size:13px}
+footer p{margin:0 0 7px}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+@media (max-width:560px){
+  .wrap{padding:26px 15px 60px}
+  .badge{width:60px; height:60px; font-size:32px}
+  h1{font-size:20px}
+}
+@media print{
+  body::before, .top .btn, #clr, .legend{display:none}
+  .card, ul.res{box-shadow:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div>
+      <h1>Karolinska Institutet Journal List</h1>
+      <p class="sub">Is a journal level 3, 2, 1 or 0? Type its name or ISSN.</p>
+    </div>
+    <button class="btn" id="theme" type="button" aria-label="Switch colour theme">Dark</button>
+  </div>
+
+  <div class="search">
+    <label class="sr" for="q">Journal title or ISSN</label>
+    <input id="q" type="search" autocomplete="off" autocapitalize="off" spellcheck="false"
+           placeholder="e.g. Lancet, BMJ open, 0140-6736" aria-describedby="hint">
+    <button id="clr" type="button" aria-label="Clear" hidden>&times;</button>
+  </div>
+  <p class="hint" id="hint">Partial titles and small typos are fine. ISSN works with or without the hyphen.</p>
+
+  <div id="out" aria-live="polite"></div>
+
+  <section class="legend" id="legend">
+    <h2>What the levels mean</h2>
+    <div class="lg"><span class="chip lv3">3</span><span><b>Highest quality.</b> 142 journals.</span></div>
+    <div class="lg"><span class="chip lv2">2</span><span><b>High standard.</b> 652 journals.</span></div>
+    <div class="lg"><span class="chip lv1">1</span><span><b>Fulfils the criteria for scientific publishing.</b> 5,106 journals.</span></div>
+    <div class="lg"><span class="chip lv0">0</span><span><b>Does not fulfil the criteria for scientific publishing</b> &mdash; not recommended. 955 journals.</span></div>
+  </section>
+
+  <footer>
+    <p>Karolinska Institutet Journal List (KI-JL) 2026, decided by the Faculty Board on 5&nbsp;May&nbsp;2026 on the
+      recommendation of the Committee for Research (Dnr&nbsp;2-1422/2025). <span id="n"></span> journals.</p>
+    <p>The list itself and the grading criteria:
+      <a href="https://staff.ki.se/research-support/karolinska-institutet-journal-list-kijl">staff.ki.se</a>.
+      This page is a lookup over the published spreadsheet and is not itself an official KI service &mdash;
+      where the two differ, the spreadsheet on staff.ki.se is what counts.</p>
+  </footer>
+</div>
+
+<script>
+"use strict";
+const DATA = {{DATA}};
+
+/* Same folding the build script applied to the titles it shipped: drop
+   diacritics and punctuation so "Zeitschrift fur..." finds "für", and
+   "Cold Spring Harb. Perspect. Med" finds the spelled-out title. */
+function norm(s){
+  return s.normalize("NFKD").replace(/[̀-ͯ]/g,"").toLowerCase()
+          .replace(/&/g," and ").replace(/[^a-z0-9]+/g," ").trim();
+}
+const digits = s => s.replace(/[^0-9xX]/g,"").toUpperCase();
+
+/* [title, issnPrint, issnDigital, level, extraIssns?] */
+const J = DATA.rows.map(r => ({
+  t:r[0], p:r[1], d:r[2], l:r[3], x:r[4]||[],
+  n:norm(r[0]), k:new Set([r[1],r[2],...(r[4]||[])].filter(Boolean).map(digits))
+}));
+document.getElementById("n").textContent = J.length.toLocaleString("en-GB");
+
+/* Titles that name more than one journal at different levels. There are four
+   in the 2026 list (Omega, Surgery, Medicina, Revista de psiquiatria y salud
+   mental). Answering one of these with a single number would be wrong, so the
+   page flags them and makes the reader pick on ISSN. */
+const AMBIG = (() => {
+  const by = new Map();
+  for(const j of J){ (by.get(j.n) || by.set(j.n,[]).get(j.n)).push(j); }
+  const s = new Set();
+  for(const [n,g] of by) if(g.length>1 && new Set(g.map(x=>x.l)).size>1) s.add(n);
+  return s;
+})();
+
+/* Tuned in tests/tune.js against real typos and against journals that are
+   genuinely absent. See the table in README.md. */
+const FUZZ = 0.72;
+
+const MEAN = {
+  3:["Highest quality","One of the 142 journals KI grades at its top level."],
+  2:["High standard",""],
+  1:["Fulfils the criteria for scientific publishing",""],
+  0:["Does not fulfil the criteria for scientific publishing",""],
+};
+
+/* Approximate matching, for when someone mistypes or half-remembers a title.
+   Whole-string similarity does not work here: "Journal of Imaginary Studies"
+   and "Journal of aging studies" share so much boilerplate that they score
+   higher than "Naure" against "Nature". So words are compared individually and
+   weighted by how distinctive they are - "journal" and "of" occur in thousands
+   of titles and count for almost nothing, while a word appearing in one title,
+   or in none, carries the decision. A typo perturbs a distinctive word
+   slightly; a journal that simply is not on the list has a distinctive word
+   that matches nothing, and lands far below the threshold. */
+const DF = new Map(), PFX = new Map();
+J.forEach((j, i) => {
+  for(const w of new Set(j.n.split(" "))){
+    if(!w) continue;
+    DF.set(w, (DF.get(w) || 0) + 1);
+    const p = w.slice(0, 2), a = PFX.get(p) || PFX.set(p, []).get(p);
+    if(a[a.length - 1] !== i) a.push(i);
+  }
+});
+/* A word absent from every title is maximally distinctive, hence the +1 only
+   in the denominator of the frequency and not in the count of titles. */
+const idf = w => Math.log(J.length / ((DF.get(w) || 0) + 1));
+
+/* Damerau-Levenshtein: plain edit distance would charge two for a transposed
+   pair, which is the single most common typing error ("Jorunal", "Opne"). */
+function dl(a, b){
+  if(a === b) return 0;
+  const m = a.length, n = b.length;
+  if(!m || !n) return m || n;
+  let prev2 = null, prev = new Array(n + 1), curr = new Array(n + 1);
+  for(let j = 0; j <= n; j++) prev[j] = j;
+  for(let i = 1; i <= m; i++){
+    curr[0] = i;
+    for(let j = 1; j <= n; j++){
+      const c = a[i-1] === b[j-1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j-1] + 1, prev[j-1] + c);
+      if(i > 1 && j > 1 && a[i-1] === b[j-2] && a[i-2] === b[j-1])
+        curr[j] = Math.min(curr[j], prev2[j-2] + 1);
+    }
+    prev2 = prev; prev = curr; curr = new Array(n + 1);
+  }
+  return prev[n];
+}
+/* Two words count as the same word only within an absolute number of edits.
+   A ratio does not work here: four edits inside an eleven-letter word still
+   looks like 64% agreement, which is how "fabrication" reached "radiation",
+   yet every real typo in the test set is a single edit. Short words must match
+   exactly, because one edit is the whole difference between BMJ and BMC. */
+function wsim(a, b){
+  if(a === b) return 1;
+  const m = Math.max(a.length, b.length);
+  if(m < 4 || Math.abs(a.length - b.length) > 2) return 0;
+  const d = dl(a, b);
+  return d > (m > 7 ? 2 : 1) ? 0 : 1 - d / m;
+}
+
+/* Weighted share of the query's meaning that the title accounts for.
+   The query is aligned to a CONTIGUOUS run of the title's words rather than
+   being allowed to collect matches from anywhere in it. Word order and
+   adjacency survive a typo, so insisting on them costs nothing for real
+   misspellings, and it stops a four-word query from assembling a false match
+   out of scattered words in one of the long titles that carry a society name
+   ("... : the official publication of the International Society of ..."), which
+   is otherwise the main source of wrong answers. The run is strictly adjacent:
+   allowing even one position of slack per word lets a four-word query stretch
+   across six title positions, which is how "International Journal of
+   Fabrication" reached the "publication" in a society name. A query with a word
+   genuinely missing is not a typo, and is served by the substring path. */
+function fuzzyScore(qt, j){
+  const ws = j.n.split(" "), nq = qt.length, nw = ws.length;
+  const W = qt.map(q => Math.max(idf(q), 0.2));
+  const den = W.reduce((a, b) => a + b, 0);
+  if(!den) return 0;
+  const m = qt.map(q => ws.map(t => {
+    const s = wsim(q, t);
+    return s >= 0.62 ? s : 0;               /* a near-miss is not a match */
+  }));
+  let best = 0;
+  for(let off = 0; off <= Math.max(0, nw - nq); off++){
+    let num = 0;
+    for(let i = 0; i < nq; i++){
+      const k = off + i;
+      num += W[i] * (k < nw ? m[i][k] : 0);
+    }
+    if(num > best){ best = num; if(best >= den) break; }
+  }
+  return best / den;
+}
+
+function search(raw){
+  const q = norm(raw);
+  if(!q) return {hits:[], mode:"empty"};
+
+  /* An ISSN is unambiguous, so it short-circuits everything else. */
+  const dq = digits(raw);
+  if(/^[0-9]{7}[0-9X]$/.test(dq)){
+    const hits = J.filter(j => j.k.has(dq));
+    return {hits, mode:"issn"};
+  }
+
+  const scored = [];
+  for(const j of J){
+    let s = 0;
+    if(j.n === q) s = 1000;
+    else if(j.n.startsWith(q + " ")) s = 800;
+    else if(j.n.startsWith(q)) s = 700;
+    else if(j.n.includes(" " + q + " ") || j.n.endsWith(" " + q)) s = 600;
+    else if(j.n.includes(q)) s = 400;
+    if(s) scored.push([s - Math.min(j.n.length,300)/1000, j]);
+  }
+  /* Nothing landed, or almost nothing, and the query is long enough that a
+     typo is the likely explanation - try approximate matching. Candidates come
+     from the two-letter prefix index rather than the whole list, so this costs
+     a few hundred comparisons instead of 6,855. */
+  if(scored.length < 5 && q.length >= 4){
+    const seen = new Set(scored.map(x => x[1].t)), qt = q.split(" ").filter(Boolean);
+    const cand = new Set();
+    for(const w of qt) for(const i of (PFX.get(w.slice(0, 2)) || [])) cand.add(i);
+    for(const i of cand){
+      const j = J[i];
+      if(seen.has(j.t)) continue;
+      const f = fuzzyScore(qt, j);
+      if(f >= FUZZ) scored.push([100 + f*100 - j.n.length/1000, j]);
+    }
+  }
+  scored.sort((a,b) => b[0] - a[0] || a[1].t.localeCompare(b[1].t));
+  return {hits:scored.map(x => x[1]), mode:"title", fuzzyOnly: scored.length>0 && scored[0][0] < 400};
+}
+
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function issnLine(j){
+  const parts = [];
+  if(j.p) parts.push("ISSN " + j.p);
+  if(j.d) parts.push((j.p ? "" : "ISSN ") + j.d + (j.p ? " (online)" : " (online)"));
+  for(const e of j.x) parts.push(e);
+  return parts.join(" &middot; ");
+}
+
+function verdict(j){
+  const [label, extra] = MEAN[j.l];
+  const amb = AMBIG.has(j.n);
+  let note = "";
+  if(j.l === 0){
+    note = '<p class="note warn"><b>Level 0 is a caution, not a low rank.</b> KI grades these journals as ' +
+           'not meeting the criteria for scientific publishing, and does not recommend publishing in them. ' +
+           'If you are considering a submission here, talk to the library first.</p>';
+  } else if(extra){
+    note = '<p class="note">' + extra + "</p>";
+  }
+  if(amb){
+    note += '<p class="note warn"><b>More than one journal is called this.</b> They sit at different levels, ' +
+            'so check the ISSN against the one you mean &mdash; both are listed below.</p>';
+  }
+  return '<div class="card"><div class="verdict">' +
+    '<div class="badge lv' + j.l + '">' + j.l + "</div>" +
+    '<div><p class="vtitle">' + esc(j.t) + "</p>" +
+    '<p class="vmean">Level ' + j.l + ' &mdash; <b>' + label + "</b></p>" +
+    '<p class="meta">' + (issnLine(j) || "no ISSN listed") + "</p></div></div>" +
+    note + "</div>";
+}
+
+function notFound(raw){
+  return '<div class="card"><div class="verdict">' +
+    '<div class="badge n lvx">not<br>listed</div>' +
+    '<div><p class="vtitle">No match for &ldquo;' + esc(raw.trim()) + "&rdquo;</p>" +
+    '<p class="vmean">This journal is not in the KI-JL 2026.</p></div></div>' +
+    '<p class="note"><b>Not listed is not the same as level 0.</b> The list covers journals in KI&rsquo;s ' +
+    'bibliometric system &mdash; those a KI author has published in since 2018, plus those in the Norwegian ' +
+    'and Finnish registers. A journal can be absent simply because nobody at KI has published there yet. ' +
+    'Check the spelling, try the ISSN, or ask the library to have it considered in the next annual round.</p></div>';
+}
+
+/* Two or more journals, one name, different levels - presented side by side
+   with no winner, because there is no way to choose between them from the
+   title alone. */
+function splitVerdict(qn, group){
+  const g = group.slice().sort((a, b) => b.l - a.l);
+  return '<div class="card split"><div class="verdict">' +
+    '<div class="badge amb" aria-hidden="true">?</div>' +
+    '<div><h2>' + esc(g[0].t) + "</h2>" +
+    "<p class=\"lead\"><b>" + g.length + " different journals share this name</b>, at " +
+    g.map(j => "level " + j.l).join(" and ") + ". Match the ISSN to tell them apart.</p></div></div>" +
+    '<ul class="res tied">' + g.map(j =>
+      '<li><span class="row" role="group">' +
+      '<span class="chip lv' + j.l + '">' + j.l + "</span>" +
+      '<span class="rt"><span class="t">' + "Level " + j.l + " &mdash; " + esc(MEAN[j.l][0]) + "</span>" +
+      '<span class="i">' + (issnLine(j) || "no ISSN listed") + "</span></span></span></li>").join("") +
+    "</ul></div>";
+}
+
+let cur = [];
+function render(raw){
+  const out = document.getElementById("out");
+  const legend = document.getElementById("legend");
+  const {hits, mode, fuzzyOnly} = search(raw);
+  document.getElementById("clr").hidden = !raw;
+  legend.hidden = !!raw.trim();
+
+  if(mode === "empty"){ out.innerHTML = ""; cur = []; return; }
+  if(!hits.length){ out.innerHTML = notFound(raw); cur = []; return; }
+
+  cur = hits;
+  let html = "";
+  if(hits.length === 1){ out.innerHTML = verdict(hits[0]); return; }
+
+  /* When the query names one of the titles that belongs to more than one
+     journal, showing the best-scoring one with a caveat underneath is not good
+     enough: the two journals called "Surgery" are level 2 and level 0, and a
+     reader who takes the headline number and stops has been told the opposite
+     of the truth. In that case the page refuses to pick and shows the
+     candidates together, so the ISSN has to be used. */
+  const qn = norm(raw), tied = AMBIG.has(qn) ? hits.filter(j => j.n === qn) : [];
+  if(tied.length > 1){ html += splitVerdict(qn, tied); }
+  else html += verdict(hits[0]);
+  const rest = hits.slice(0, 60);
+  html += '<p class="count">' + hits.length.toLocaleString("en-GB") + " match" + (hits.length===1?"":"es") +
+          (mode === "issn" ? " on that ISSN" : "") +
+          (fuzzyOnly ? " &mdash; nothing matched exactly, so these are close spellings" : "") +
+          (hits.length > 60 ? ", showing the first 60" : "") + "</p>";
+  html += '<ul class="res">';
+  rest.forEach((j, i) => {
+    html += '<li><button class="row" data-i="' + i + '"' + (i===0?' aria-current="true"':"") + '>' +
+      '<span class="chip lv' + j.l + '">' + j.l + "</span>" +
+      '<span class="rt"><span class="t">' + esc(j.t) + "</span>" +
+      '<span class="i">' + (issnLine(j) || "no ISSN listed") + "</span></span></button></li>";
+  });
+  html += "</ul>";
+  out.innerHTML = html;
+  out.querySelectorAll(".row").forEach(b => b.addEventListener("click", () => {
+    const j = cur[+b.dataset.i];
+    out.querySelector(".card").outerHTML = verdict(j);
+    out.querySelectorAll(".row").forEach(o => o.setAttribute("aria-current", String(o === b)));
+    document.querySelector(".card").scrollIntoView({block:"nearest", behavior:"smooth"});
+  }));
+}
+
+const q = document.getElementById("q");
+q.addEventListener("input", () => render(q.value));
+document.getElementById("clr").addEventListener("click", () => { q.value=""; render(""); q.focus(); });
+q.focus();
+
+/* Theme ------------------------------------------------------------------- */
+(function(){
+  const d = document.documentElement, k = "kijl-theme", btn = document.getElementById("theme");
+  const sysDark = () => matchMedia("(prefers-color-scheme:dark)").matches;
+  const isDark = () => (d.getAttribute("data-theme") || (sysDark() ? "dark" : "light")) === "dark";
+  const paint = () => { btn.textContent = isDark() ? "Light" : "Dark"; };
+  btn.addEventListener("click", () => {
+    const next = isDark() ? "light" : "dark";
+    d.setAttribute("data-theme", next);
+    try{ localStorage.setItem(k, next); }catch(e){}
+    paint();
+  });
+  matchMedia("(prefers-color-scheme:dark)").addEventListener("change", paint);
+  paint();
+})();
+</script>
+</body>
+</html>
