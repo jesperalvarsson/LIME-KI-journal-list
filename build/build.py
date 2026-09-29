@@ -11,7 +11,13 @@ tpl  = open(os.path.join(HERE, "template.html"), encoding="utf-8").read()
 font = open(os.path.join(HERE, "font.css"), encoding="utf-8").read().strip()
 data = open(os.path.join(ROOT, "data/journals.json"), encoding="utf-8").read().strip()
 
-out = os.path.join(ROOT, "dist", "ki-journal-list.html")
+# Two destinations, same bytes. dist/ki-journal-list.html keeps a filename
+# worth emailing; index.html at the repository root is what GitHub Pages serves
+# from the short URL. Writing both from one string is what stops them drifting,
+# and because the contents are identical git stores a single blob for the two
+# paths, so the duplicate costs nothing in the history.
+out  = os.path.join(ROOT, "dist", "ki-journal-list.html")
+page = os.path.join(ROOT, "index.html")
 assert tpl.count("{{FONT}}") == 1 and tpl.count("{{DATA}}") == 1
 html = tpl.replace("{{FONT}}", font).replace("{{DATA}}", data)
 
@@ -20,5 +26,10 @@ html = tpl.replace("{{FONT}}", font).replace("{{DATA}}", data)
 assert "</script" not in data.lower(), "data contains a script terminator"
 
 os.makedirs(os.path.dirname(out), exist_ok=True)
-open(out, "w", encoding="utf-8").write(html)
-print(f"{out}  {os.path.getsize(out)/1024:.0f} kB")
+for path in (out, page):
+    open(path, "w", encoding="utf-8").write(html)
+
+a, b = (open(p, "rb").read() for p in (out, page))
+assert a == b, "the two copies differ"
+print(f"{out}  {len(a)/1024:.0f} kB")
+print(f"{page}  identical copy for GitHub Pages")

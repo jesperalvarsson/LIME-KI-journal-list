@@ -5,14 +5,26 @@ or not on the Karolinska Institutet Journal List at all? Built from the KI-JL
 2026 spreadsheet (6,855 journals, decided by the Faculty Board 5 May 2026,
 Dnr 2-1422/2025).
 
-Open `dist/ki-journal-list.html` in any browser. It needs no server, no network
-and no install; the data and the font are inside the file, so it can be emailed
-or put on a shared drive and it will still work offline.
+Live at <https://jesperalvarsson.github.io/LIME-KI-journal-list/>
+
+Or open `dist/ki-journal-list.html` in any browser. It needs no server, no
+network and no install; the data and the font are inside the file, so it can be
+emailed or put on a shared drive and it will still work offline.
 
 ## Build
 
     python build/make_data.py     # kijl_2026.xlsx -> data/journals.json
-    python build/build.py         # template + data + font -> dist/
+    python build/build.py         # template + data + font -> dist/ and index.html
+
+The build writes the same bytes twice: `dist/ki-journal-list.html`, whose name
+is worth emailing, and `index.html` at the root, which is what GitHub Pages
+serves from the short URL. They are written from one string and compared after
+writing, so they cannot drift; git stores identical content once, so the second
+path costs nothing in the history. Do not edit either by hand — edit
+`build/template.html` and rebuild.
+
+`.nojekyll` stops GitHub Pages from running the files through Jekyll, which
+would otherwise try to interpret parts of the repository as a site.
 
 ## Test
 
