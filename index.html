@@ -107,7 +107,17 @@ h1{font-size:23px; line-height:1.25; margin:0; color:var(--head); font-weight:60
 .note b{color:var(--head)}
 
 /* Result list ------------------------------------------------------------- */
-.count{color:var(--faint); font-size:13px; margin:20px 2px 8px}
+.lbar{display:flex; justify-content:space-between; align-items:center; gap:14px; margin:20px 2px 8px}
+.count{color:var(--faint); font-size:13px; margin:0}
+.sortbox{flex:none; display:flex; align-items:center; gap:7px}
+.slab{color:var(--faint); font-size:13px}
+.seg{display:flex; border:1px solid var(--border-strong); border-radius:8px; overflow:hidden}
+.sb{font:inherit; font-size:13px; padding:4px 11px; cursor:pointer; border:0;
+  background:var(--surface-2); color:var(--dim)}
+.sb + .sb{border-left:1px solid var(--border-strong)}
+.sb[aria-pressed=false]:hover{background:var(--accent-soft); color:var(--accent)}
+.sb[aria-pressed=true]{background:var(--accent); color:var(--on-accent)}
+.sb:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
 ul.res{list-style:none; margin:0; padding:0; border:1px solid var(--border); border-radius:12px;
   overflow:hidden; background:var(--surface)}
 ul.res li + li{border-top:1px solid var(--border)}
@@ -149,7 +159,10 @@ button.lg[aria-pressed=false]{opacity:.45}
 button.lg[aria-pressed=true] .box{background:var(--accent); border-color:var(--accent)}
 button.lg[aria-pressed=true] .box::after{content:"\2713"}
 .lg .chip{width:26px; height:26px; font-size:13px; border-radius:7px; align-self:center}
-.lg span{color:var(--dim); font-size:14px}
+/* :not(.chip) matters. Without it this rule outranks .lv3 and .lv2 - one class
+   plus an element beats one class - and the legend's chips lost their white ink
+   and rendered a dark digit on a dark square. */
+.lg span:not(.chip){color:var(--dim); font-size:14px}
 .lg b{color:var(--head); font-weight:600}
 .sentinel{height:1px}
 #count:empty{display:none}
@@ -203,7 +216,16 @@ footer p{margin:0 0 7px}
 
   <div id="out">
     <div id="vcard"></div>
+    <div class="lbar">
     <p class="count" id="count" role="status"></p>
+    <div class="sortbox" id="sortbox" role="group" aria-label="Sort the list">
+      <span class="slab" aria-hidden="true">Sort</span>
+      <div class="seg">
+        <button class="sb" type="button" data-sort="title" aria-pressed="true">A&ndash;Z</button>
+        <button class="sb" type="button" data-sort="level" aria-pressed="false">Level</button>
+      </div>
+    </div>
+  </div>
     <ul class="res main" id="list"></ul>
     <div id="sent" class="sentinel" aria-hidden="true"></div>
   </div>
@@ -542,6 +564,12 @@ const ALL = J.slice().sort((a, b) => a.t.localeCompare(b.t, "en"));
    answer this page must never give. Every visit starts showing everything. */
 const active = new Set([3, 2, 1, 0]);
 
+/* "title" or "level". Alphabetical is the default because it is the order you
+   need to find a journal you half-remember; level order is there for the other
+   question, which is what the good options are in a field. Not remembered
+   between visits, for the same reason the level filter is not. */
+let sortBy = "title";
+
 const el = id => document.getElementById(id);
 const BATCH = 150;
 let cur = [], shown = 0;
@@ -584,6 +612,7 @@ function render(raw){
     el("vcard").innerHTML = notFound(raw);
     el("count").textContent = "";
     el("list").innerHTML = ""; el("sent").hidden = true;
+    el("sortbox").hidden = true;
     cur = []; shown = 0;
     return;
   }
@@ -600,6 +629,11 @@ function render(raw){
   el("vcard").innerHTML = card;
 
   cur = hits.filter(j => active.has(j.l));
+  /* Array.prototype.sort is stable, so ordering on the level alone keeps
+     whatever order the list already had inside each level: alphabetical when
+     browsing, best match first when searching. */
+  if(sortBy === "level") cur.sort((a, b) => b.l - a.l);
+  el("sortbox").hidden = cur.length < 2;
   shown = 0;
   el("list").innerHTML = "";
   const hid = hits.length - cur.length;
@@ -609,13 +643,15 @@ function render(raw){
   if(!on.length) line = "Every level is switched off, so the list is empty.";
   else if(!query)
     line = cur.length.toLocaleString("en-GB") +
-      (hid ? " of " + hits.length.toLocaleString("en-GB") : "") + " journals, sorted by title" +
+      (hid ? " of " + hits.length.toLocaleString("en-GB") : "") + " journals, " +
+      (sortBy === "level" ? "level 3 first" : "sorted by title") +
       (hid ? " \u2014 showing level " + on.join(", ") : "");
   else
     line = hits.length.toLocaleString("en-GB") + " match" + (hits.length === 1 ? "" : "es") +
       (r.mode === "issn" ? " on that ISSN" : "") +
       (r.fuzzyOnly ? " \u2014 nothing matched exactly, so these are close spellings" : "") +
-      (hid ? ", " + hid.toLocaleString("en-GB") + " hidden by the level filter" : "");
+      (hid ? ", " + hid.toLocaleString("en-GB") + " hidden by the level filter" : "") +
+      (sortBy === "level" ? ", level 3 first" : "");
   el("count").textContent = line;
 
   el("sent").hidden = false;
@@ -647,6 +683,14 @@ for(const b of document.querySelectorAll("button.lg"))
     if(active.has(l)) active.delete(l); else active.add(l);
     render(q.value);
   });
+for(const b of document.querySelectorAll("button.sb"))
+  b.addEventListener("click", () => {
+    sortBy = b.dataset.sort;
+    for(const o of document.querySelectorAll("button.sb"))
+      o.setAttribute("aria-pressed", String(o.dataset.sort === sortBy));
+    render(q.value);
+  });
+
 el("reset").addEventListener("click", () => {
   for(const l of [3, 2, 1, 0]) active.add(l);
   render(q.value);

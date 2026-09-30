@@ -7,6 +7,9 @@ Dnr 2-1422/2025).
 
 Live at <https://jesperalvarsson.github.io/LIME-KI-journal-list/>
 
+![The page answering a search for Lancet: a level 3 verdict above the filtered
+list](shots/light-06-level3.png)
+
 Or open `dist/ki-journal-list.html` in any browser. It needs no server, no
 network and no install; the data and the font are inside the file, so it can be
 emailed or put on a shared drive and it will still work offline.
@@ -37,13 +40,23 @@ would otherwise try to interpret parts of the repository as a site.
 `extract.js` pulls the script out of the built file rather than the template, so
 the tests cannot pass against a version that was never shipped.
 
-## Browsing and the level filters
+## Browsing, sorting and the level filters
 
 The whole list sits under the search box, sorted by title, so the page is useful
 before anyone types and a researcher can scan for a title they cannot quite
 spell. Typing filters it; clearing the box brings it back. The rows arrive 150 at
 a time as you scroll, because putting 6,855 of them in the document at once makes
 scrolling stutter on an ordinary laptop.
+
+The list sorts either way. Alphabetical is the default, because that is the order
+you need to find a journal you half-remember. Level order, highest first, answers
+the other question - what the good options are in a field - and it works on a
+search as well as on the whole list: searching *oncology* in level order gives
+JAMA Oncology, Annals of Oncology and The Lancet Oncology before anything at a
+lower level. The sort is stable, so within one level the previous order survives:
+alphabetical when browsing, best match first when searching. The verdict card is
+unaffected, so the journal you actually typed is still the one answered above the
+list.
 
 The four levels are toggles, all on to begin with. Switching one off takes those
 journals out of the list. Two decisions there are deliberate and should survive
@@ -138,13 +151,17 @@ Where the two differ, the spreadsheet on staff.ki.se is what counts.
 
 ## Screenshots
 
-`shots/` holds twelve rendered states in both themes: the list as it opens, the
-list scrolled, the list with levels 1 and 0 switched off, a level 0 journal found
-while level 0 is hidden, the reset, a level 3 verdict, a level 0 caution, a
-shared name, a shared title, a not-listed result, a corrected typo and an ISSN
-lookup. Regenerate them with
-
     python tests/shots.py
 
-which also fails if the page logs a console error or if the level filter ever
-suppresses a level 0 verdict.
+renders fourteen states into `shots/`, in both themes: the list as it opens, the
+list scrolled, the list with levels 1 and 0 switched off, a level 0 journal found
+while level 0 is hidden, the reset, a level 3 verdict, a level 0 caution, a
+shared name, a shared title, a not-listed result, a corrected typo, an ISSN
+lookup, the list in level order and a search in level order.
+
+It is a check, not only a record. It fails if the page logs a console error, if
+the level filter ever suppresses a level 0 verdict, if level order does not lead
+with level 3, or if a chip in the legend does not use the same ink as a chip in
+the list - a CSS rule for the legend's text once outranked the level colours and
+left a dark digit on a dark square in light mode, which is invisible rather than
+merely ugly.

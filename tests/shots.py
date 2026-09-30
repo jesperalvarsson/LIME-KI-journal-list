@@ -39,6 +39,25 @@ async def main():
                 await pg.evaluate("window.scrollTo(0,0)")
                 await shot(name, note)
 
+            # A chip in the legend must use the same ink as a bare chip. A CSS
+            # rule for the legend's text once outranked the level colours - one
+            # class plus an element beats one class - and left a dark digit on a
+            # dark square in light mode, which is invisible rather than merely
+            # ugly, so it is worth a check rather than an eye.
+            for lv in (3, 2, 1, 0):
+                same = await pg.evaluate(
+                    """lv => {
+                         const p = document.createElement("span");
+                         p.className = "chip lv" + lv;
+                         document.body.appendChild(p);
+                         const want = getComputedStyle(p).color;
+                         p.remove();
+                         const c = document.querySelector(".lg .chip.lv" + lv);
+                         return [want, getComputedStyle(c).color];
+                       }""", lv)
+                if same[0] != same[1]:
+                    errs.append(f"legend chip {lv} ink {same[1]} != {same[0]} ({theme})")
+
             # the whole list, before anyone types
             await shot("01-browse")
             for _ in range(4):
@@ -73,6 +92,20 @@ async def main():
             await find("Journal of Imaginary Studies", "10-not-listed")
             await find("New Englnad journal of medicine", "11-typo")
             await find("0140-6736", "12-issn")
+
+            # level order, browsing and within a search
+            await pg.fill("#q", "")
+            await pg.wait_for_timeout(300)
+            await pg.click('button.sb[data-sort="level"]')
+            await pg.wait_for_timeout(350)
+            await pg.evaluate("window.scrollTo(0,0)")
+            await shot("13-by-level")
+            tops = await pg.eval_on_selector_all("#list .chip", "e => e.map(x => x.textContent)")
+            if tops[:8] != ["3"] * 8:
+                errs.append(f"level sort does not lead with 3s: {tops[:8]}")
+            await find("oncology", "14-by-level-search")
+            await pg.click('button.sb[data-sort="title"]')
+            await pg.wait_for_timeout(300)
             await pg.close()
         await b.close()
     print("\nconsole errors:", errs or "none")
