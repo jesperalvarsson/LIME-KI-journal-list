@@ -6,7 +6,7 @@ function best(q){
   const qt=norm(q).split(" ").filter(Boolean), cand=new Set();
   for(const w of qt) for(const i of (PFX.get(w.slice(0,2))||[])) cand.add(i);
   let b=[0,null];
-  for(const i of cand){ const f=fuzzyScore(qt,J[i]); if(f>b[0]||(f===b[0]&&b[1]&&J[i].t.length<b[1].length)) b=[f,J[i].t]; }
+  for(const i of cand){ const f=fuzzyScore(qt,J[i].n); if(f>b[0]||(f===b[0]&&b[1]&&J[i].t.length<b[1].length)) b=[f,J[i].t]; }
   return b;
 }
 const T=["Lancett","Naure","Lanct","BMJ Opne","Plos medicin","Jorunal of affective disorders",

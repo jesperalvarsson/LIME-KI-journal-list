@@ -19,6 +19,12 @@ global.document = {
   querySelectorAll(){ return [] },
   createElement(){ return el() },
 };
+/* The page tells the lazy-list observer to look again by firing an event on
+   window; under node there is no observer, so the event only needs to exist. */
+global.Event = class { constructor(t){ this.type = t } };
+global.dispatchEvent = () => true;
+global.addEventListener = () => {};
+
 global.matchMedia = () => ({ matches:false, addEventListener(){}, addListener(){} });
 global.localStorage = { getItem(){ return null }, setItem(){}, removeItem(){} };
 global.window = global;

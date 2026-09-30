@@ -132,12 +132,27 @@ input[type=search]::-webkit-search-decoration{-webkit-appearance:none;appearance
 
 /* Legend and footer ------------------------------------------------------- */
 .legend{margin-top:26px}
-.legend h2{font-size:14px; color:var(--head); margin:0 0 10px; font-weight:600}
-.lg{display:flex; gap:11px; align-items:baseline; padding:7px 0}
-.lg + .lg{border-top:1px solid var(--border)}
+.lhead{display:flex; justify-content:space-between; align-items:baseline; gap:12px}
+.legend h2{font-size:14px; color:var(--head); margin:0; font-weight:600}
+.lsub{color:var(--faint); font-size:13px; margin:3px 0 8px; max-width:62ch}
+.reset{flex:none; font:inherit; font-size:13px; padding:4px 10px; border-radius:8px; cursor:pointer;
+  background:var(--surface-2); color:var(--accent); border:1px solid var(--border-strong)}
+.reset:hover{background:var(--accent-soft)}
+button.lg{display:flex; gap:11px; align-items:center; width:100%; padding:7px 8px; text-align:left;
+  font:inherit; background:none; border:0; border-radius:9px; cursor:pointer}
+button.lg + button.lg{border-top:1px solid var(--border); border-radius:0}
+button.lg:hover{background:var(--surface-2)}
+button.lg:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
+button.lg[aria-pressed=false]{opacity:.45}
+.box{flex:none; width:19px; height:19px; border-radius:5px; border:2px solid var(--border-strong);
+  display:grid; place-items:center; font-size:12px; line-height:1; color:var(--on-accent)}
+button.lg[aria-pressed=true] .box{background:var(--accent); border-color:var(--accent)}
+button.lg[aria-pressed=true] .box::after{content:"\2713"}
 .lg .chip{width:26px; height:26px; font-size:13px; border-radius:7px; align-self:center}
 .lg span{color:var(--dim); font-size:14px}
 .lg b{color:var(--head); font-weight:600}
+.sentinel{height:1px}
+#count:empty{display:none}
 footer{margin-top:34px; padding-top:18px; border-top:1px solid var(--border); color:var(--faint); font-size:13px}
 footer p{margin:0 0 7px}
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
@@ -171,15 +186,27 @@ footer p{margin:0 0 7px}
   </div>
   <p class="hint" id="hint">Partial titles and small typos are fine. ISSN works with or without the hyphen.</p>
 
-  <div id="out" aria-live="polite"></div>
-
   <section class="legend" id="legend">
-    <h2>What the levels mean</h2>
-    <div class="lg"><span class="chip lv3">3</span><span><b>Highest quality.</b> 142 journals.</span></div>
-    <div class="lg"><span class="chip lv2">2</span><span><b>High standard.</b> 652 journals.</span></div>
-    <div class="lg"><span class="chip lv1">1</span><span><b>Fulfils the criteria for scientific publishing.</b> 5,106 journals.</span></div>
-    <div class="lg"><span class="chip lv0">0</span><span><b>Does not fulfil the criteria for scientific publishing</b> &mdash; not recommended. 955 journals.</span></div>
+    <div class="lhead">
+      <h2 id="lvh">What the levels mean</h2>
+      <button class="reset" id="reset" type="button" hidden>Show all levels</button>
+    </div>
+    <p class="lsub">Switch a level off to take it out of the list. The answer to a search always
+      shows its real level, whatever is switched off here.</p>
+    <div role="group" aria-labelledby="lvh">
+      <button class="lg" type="button" data-lv="3" aria-pressed="true"><span class="box" aria-hidden="true"></span><span class="chip lv3">3</span><span><b>Highest quality.</b> 142 journals.</span></button>
+      <button class="lg" type="button" data-lv="2" aria-pressed="true"><span class="box" aria-hidden="true"></span><span class="chip lv2">2</span><span><b>High standard.</b> 652 journals.</span></button>
+      <button class="lg" type="button" data-lv="1" aria-pressed="true"><span class="box" aria-hidden="true"></span><span class="chip lv1">1</span><span><b>Fulfils the criteria for scientific publishing.</b> 5,106 journals.</span></button>
+      <button class="lg" type="button" data-lv="0" aria-pressed="true"><span class="box" aria-hidden="true"></span><span class="chip lv0">0</span><span><b>Does not fulfil the criteria for scientific publishing</b> &mdash; not recommended. 955 journals.</span></button>
+    </div>
   </section>
+
+  <div id="out">
+    <div id="vcard"></div>
+    <p class="count" id="count" role="status"></p>
+    <ul class="res main" id="list"></ul>
+    <div id="sent" class="sentinel" aria-hidden="true"></div>
+  </div>
 
   <footer>
     <p>Karolinska Institutet Journal List (KI-JL) 2026, decided by the Faculty Board on 5&nbsp;May&nbsp;2026 on the
@@ -204,22 +231,60 @@ function norm(s){
 }
 const digits = s => s.replace(/[^0-9xX]/g,"").toUpperCase();
 
+/* Titles here follow library cataloguing convention, and two of its punctuation
+   marks carry meaning. A colon separates the journal's own name from a
+   descriptive subtitle - "Journal of clinical oncology : official journal of the
+   American Society of Clinical Oncology" - and an equals sign separates parallel
+   names for one journal in two languages - "Advances in gerontology = Uspekhi
+   gerontologii". 847 titles carry a subtitle and 73 a parallel name, so matching
+   the whole string and nothing else got both wrong: searching the exact name of
+   a level 3 journal that carries a subtitle returned a level 0 lookalike first,
+   because the lookalike's title is shorter and so won the tiebreak on length.
+   Each name a journal genuinely goes by is therefore matched separately. */
+function names(title){
+  const out = [norm(title)];
+  for(const part of title.split(" = ")){
+    const c = part.search(/\s*:\s+/);
+    /* A one-letter tail is a series designator and belongs to the name -
+       "Acta physica Polonica: B", "International journal of pharmaceutics: X",
+       the last being a companion journal one level below its parent. Splitting
+       those would let the companion claim the parent's name. A longer tail is
+       either a descriptive subtitle or the journal's own acronym. */
+    const tail = c < 0 ? "" : part.slice(c).replace(/^\s*:\s+/, "");
+    const nm = norm(c > 0 && tail.length > 1 ? part.slice(0, c) : part);
+    if(nm && out.indexOf(nm) < 0) out.push(nm);
+  }
+  return out;
+}
+
 /* [title, issnPrint, issnDigital, level, extraIssns?] */
 const J = DATA.rows.map(r => ({
   t:r[0], p:r[1], d:r[2], l:r[3], x:r[4]||[],
-  n:norm(r[0]), k:new Set([r[1],r[2],...(r[4]||[])].filter(Boolean).map(digits))
+  n:norm(r[0]), a:names(r[0]),
+  k:new Set([r[1],r[2],...(r[4]||[])].filter(Boolean).map(digits))
 }));
+/* Length of the shortest name the journal goes by, used to break ties. The
+   subtitle must not count towards it, or a journal loses to a lookalike purely
+   for describing itself at length. */
+for(const j of J) j.ml = Math.min.apply(null, j.a.map(x => x.length));
 document.getElementById("n").textContent = J.length.toLocaleString("en-GB");
 
-/* Titles that name more than one journal at different levels. There are four
-   in the 2026 list (Omega, Surgery, Medicina, Revista de psiquiatria y salud
-   mental). Answering one of these with a single number would be wrong, so the
-   page flags them and makes the reader pick on ISSN. */
+/* Names that belong to more than one journal at more than one level. Answering
+   one of these with a single number would be wrong, so the page flags them and
+   makes the reader pick on ISSN. Five exist in the 2026 list: four titles that
+   are identical outright (Omega 1/2, Surgery 2/0, Medicina 1/0, Revista de
+   psiquiatria y salud mental 1/0) and one name carried by three journals that
+   differ only in their subtitles - Alzheimer's & dementia, whose "diagnosis,
+   assessment & disease monitoring" is level 2, "the journal of the Alzheimer's
+   Association" is level 3 and "translational research & clinical
+   interventions" is level 1. Grouping on the full title alone would miss that
+   last case and answer it with a confident 2. */
 const AMBIG = (() => {
   const by = new Map();
-  for(const j of J){ (by.get(j.n) || by.set(j.n,[]).get(j.n)).push(j); }
-  const s = new Set();
-  for(const [n,g] of by) if(g.length>1 && new Set(g.map(x=>x.l)).size>1) s.add(n);
+  for(const j of J) for(const nm of j.a){ (by.get(nm) || by.set(nm,[]).get(nm)).push(j); }
+  const s = new Map();
+  for(const [n,g] of by)
+    if(g.length > 1 && new Set(g.map(x => x.l)).size > 1) s.set(n, g);
   return s;
 })();
 
@@ -301,8 +366,8 @@ function wsim(a, b){
    across six title positions, which is how "International Journal of
    Fabrication" reached the "publication" in a society name. A query with a word
    genuinely missing is not a typo, and is served by the substring path. */
-function fuzzyScore(qt, j){
-  const ws = j.n.split(" "), nq = qt.length, nw = ws.length;
+function fuzzyScore(qt, nm){
+  const ws = nm.split(" "), nq = qt.length, nw = ws.length;
   const W = qt.map(q => Math.max(idf(q), 0.2));
   const den = W.reduce((a, b) => a + b, 0);
   if(!den) return 0;
@@ -310,15 +375,18 @@ function fuzzyScore(qt, j){
     const s = wsim(q, t);
     return s >= 0.62 ? s : 0;               /* a near-miss is not a match */
   }));
-  let best = 0;
+  let best = 0, bestOff = 0;
   for(let off = 0; off <= Math.max(0, nw - nq); off++){
     let num = 0;
     for(let i = 0; i < nq; i++){
       const k = off + i;
       num += W[i] * (k < nw ? m[i][k] : 0);
     }
-    if(num > best){ best = num; if(best >= den) break; }
+    if(num > best){ best = num; bestOff = off; if(best >= den) break; }
   }
+  /* Left on the function for the caller to read straight after the call. The
+     score alone cannot rank these matches - see the note at the call site. */
+  fuzzyScore.off = bestOff;
   return best / den;
 }
 
@@ -336,12 +404,16 @@ function search(raw){
   const scored = [];
   for(const j of J){
     let s = 0;
-    if(j.n === q) s = 1000;
-    else if(j.n.startsWith(q + " ")) s = 800;
-    else if(j.n.startsWith(q)) s = 700;
-    else if(j.n.includes(" " + q + " ") || j.n.endsWith(" " + q)) s = 600;
-    else if(j.n.includes(q)) s = 400;
-    if(s) scored.push([s - Math.min(j.n.length,300)/1000, j]);
+    for(const nm of j.a){
+      let v = 0;
+      if(nm === q) v = 1000;
+      else if(nm.startsWith(q + " ")) v = 800;
+      else if(nm.startsWith(q)) v = 700;
+      else if(nm.includes(" " + q + " ") || nm.endsWith(" " + q)) v = 600;
+      else if(nm.includes(q)) v = 400;
+      if(v > s) s = v;
+    }
+    if(s) scored.push([s - Math.min(j.ml,300)/1000, j]);
   }
   /* Nothing landed, or almost nothing, and the query is long enough that a
      typo is the likely explanation - try approximate matching. Candidates come
@@ -354,8 +426,21 @@ function search(raw){
     for(const i of cand){
       const j = J[i];
       if(seen.has(j.t)) continue;
-      const f = fuzzyScore(qt, j);
-      if(f >= FUZZ) scored.push([100 + f*100 - j.n.length/1000, j]);
+      /* Best over the journal's names, not just the full title. */
+      let f = 0, fo = 0;
+      for(const nm of j.a){
+        const v = fuzzyScore(qt, nm), o = fuzzyScore.off;
+        if(v > f || (v === f && o < fo)){ f = v; fo = o; }
+      }
+      /* Where in the title the query landed decides between equal scores. A
+         query that starts the title is nearly always the journal meant; the same
+         words further in usually belong to a different journal that merely
+         contains them. Without this, the typo "Jorunal of clinical oncology"
+         answered with "World journal of clinical oncology" - level 0 - because
+         the journal actually meant carries a subtitle and so lost the tiebreak
+         on title length. Ranking a level 3 journal as a level 0 one is the
+         worst mistake this page can make, so position outweighs length. */
+      if(f >= FUZZ) scored.push([100 + f*100 - fo*2 - j.ml/1000, j]);
     }
   }
   scored.sort((a,b) => b[0] - a[0] || a[1].t.localeCompare(b[1].t));
@@ -374,7 +459,7 @@ function issnLine(j){
 
 function verdict(j){
   const [label, extra] = MEAN[j.l];
-  const amb = AMBIG.has(j.n);
+  const amb = j.a.some(nm => AMBIG.has(nm));
   let note = "";
   if(j.l === 0){
     note = '<p class="note warn"><b>Level 0 is a caution, not a low rank.</b> KI grades these journals as ' +
@@ -409,70 +494,181 @@ function notFound(raw){
 /* Two or more journals, one name, different levels - presented side by side
    with no winner, because there is no way to choose between them from the
    title alone. */
+/* "3 and 2 and 1" reads as a stammer; "3, 2 and 1" does not. */
+function list(xs){
+  return xs.length < 2 ? (xs[0] || "")
+    : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
+}
+
 function splitVerdict(qn, group){
   const g = group.slice().sort((a, b) => b.l - a.l);
+  /* The heading has to be the shared name, not any one journal's full title -
+     naming one of them above a card that says three journals go by this name
+     would read as an answer. Cut the shortest title back to the name proper,
+     keeping its capitalisation, and only if that really is the name searched. */
+  const shortest = g.slice().sort((a, b) => a.t.length - b.t.length)[0].t;
+  const cut = shortest.split(/\s*:\s+/)[0];
+  const head = norm(cut) === qn ? cut : shortest;
+  /* When the titles differ - as they do when only a subtitle separates the
+     journals - the subtitle is the thing the reader has to choose on, so it
+     leads each row and the level moves in beside the ISSN. */
+  const differ = new Set(g.map(j => j.t)).size > 1;
+  const how = differ ? "Check which one you mean." : "Match the ISSN to tell them apart.";
   return '<div class="card split"><div class="verdict">' +
     '<div class="badge amb" aria-hidden="true">?</div>' +
-    '<div><h2>' + esc(g[0].t) + "</h2>" +
-    "<p class=\"lead\"><b>" + g.length + " different journals share this name</b>, at " +
-    g.map(j => "level " + j.l).join(" and ") + ". Match the ISSN to tell them apart.</p></div></div>" +
+    '<div><h2>' + esc(head) + "</h2>" +
+    "<p class=\"lead\"><b>" + g.length + " different journals go by this name</b>, at " +
+    "level" + (g.length > 2 ? "s " : " ") + list(g.map(j => String(j.l))) +
+    ". " + how + "</p></div></div>" +
     '<ul class="res tied">' + g.map(j =>
       '<li><span class="row" role="group">' +
       '<span class="chip lv' + j.l + '">' + j.l + "</span>" +
-      '<span class="rt"><span class="t">' + "Level " + j.l + " &mdash; " + esc(MEAN[j.l][0]) + "</span>" +
-      '<span class="i">' + (issnLine(j) || "no ISSN listed") + "</span></span></span></li>").join("") +
+      '<span class="rt"><span class="t">' +
+      (differ ? esc(j.t) : "Level " + j.l + " &mdash; " + esc(MEAN[j.l][0])) + "</span>" +
+      '<span class="i">' +
+      (differ ? "Level " + j.l + " &mdash; " + esc(MEAN[j.l][0]) + " &middot; " : "") +
+      (issnLine(j) || "no ISSN listed") + "</span></span></span></li>").join("") +
     "</ul></div>";
 }
 
-let cur = [];
-function render(raw){
-  const out = document.getElementById("out");
-  const legend = document.getElementById("legend");
-  const {hits, mode, fuzzyOnly} = search(raw);
-  document.getElementById("clr").hidden = !raw;
-  legend.hidden = !!raw.trim();
+/* Browse order. The whole list sits under the search box at all times, so the
+   page is useful before anyone types and a researcher can scan for a title
+   they cannot quite spell. */
+const ALL = J.slice().sort((a, b) => a.t.localeCompare(b.t, "en"));
 
-  if(mode === "empty"){ out.innerHTML = ""; cur = []; return; }
-  if(!hits.length){ out.innerHTML = notFound(raw); cur = []; return; }
+/* Level filter, all four on. Deliberately NOT remembered between visits: a
+   filter still set from last time would silently drop a journal from the list,
+   and "I could not find it" reads as "it is not on the list" - the one wrong
+   answer this page must never give. Every visit starts showing everything. */
+const active = new Set([3, 2, 1, 0]);
 
-  cur = hits;
-  let html = "";
-  if(hits.length === 1){ out.innerHTML = verdict(hits[0]); return; }
+const el = id => document.getElementById(id);
+const BATCH = 150;
+let cur = [], shown = 0;
 
-  /* When the query names one of the titles that belongs to more than one
-     journal, showing the best-scoring one with a caveat underneath is not good
-     enough: the two journals called "Surgery" are level 2 and level 0, and a
-     reader who takes the headline number and stops has been told the opposite
-     of the truth. In that case the page refuses to pick and shows the
-     candidates together, so the ISSN has to be used. */
-  const qn = norm(raw), tied = AMBIG.has(qn) ? hits.filter(j => j.n === qn) : [];
-  if(tied.length > 1){ html += splitVerdict(qn, tied); }
-  else html += verdict(hits[0]);
-  const rest = hits.slice(0, 60);
-  html += '<p class="count">' + hits.length.toLocaleString("en-GB") + " match" + (hits.length===1?"":"es") +
-          (mode === "issn" ? " on that ISSN" : "") +
-          (fuzzyOnly ? " &mdash; nothing matched exactly, so these are close spellings" : "") +
-          (hits.length > 60 ? ", showing the first 60" : "") + "</p>";
-  html += '<ul class="res">';
-  rest.forEach((j, i) => {
-    html += '<li><button class="row" data-i="' + i + '"' + (i===0?' aria-current="true"':"") + '>' +
-      '<span class="chip lv' + j.l + '">' + j.l + "</span>" +
-      '<span class="rt"><span class="t">' + esc(j.t) + "</span>" +
-      '<span class="i">' + (issnLine(j) || "no ISSN listed") + "</span></span></button></li>";
-  });
-  html += "</ul>";
-  out.innerHTML = html;
-  out.querySelectorAll(".row").forEach(b => b.addEventListener("click", () => {
-    const j = cur[+b.dataset.i];
-    out.querySelector(".card").outerHTML = verdict(j);
-    out.querySelectorAll(".row").forEach(o => o.setAttribute("aria-current", String(o === b)));
-    document.querySelector(".card").scrollIntoView({block:"nearest", behavior:"smooth"});
-  }));
+function rowHTML(j, i){
+  return '<li><button class="row" data-i="' + i + '">' +
+    '<span class="chip lv' + j.l + '">' + j.l + "</span>" +
+    '<span class="rt"><span class="t">' + esc(j.t) + "</span>" +
+    '<span class="i">' + (issnLine(j) || "no ISSN listed") + "</span></span></button></li>";
 }
 
-const q = document.getElementById("q");
+/* Putting 6,855 rows in the document at once makes scrolling stutter on an
+   ordinary laptop, so they arrive a screenful at a time as the sentinel under
+   the list comes into view. */
+function grow(){
+  if(shown >= cur.length){ el("sent").hidden = true; return; }
+  const end = Math.min(shown + BATCH, cur.length), t = document.createElement("template");
+  let h = "";
+  for(let i = shown; i < end; i++) h += rowHTML(cur[i], i);
+  t.innerHTML = h;
+  el("list").appendChild(t.content);
+  shown = end;
+  el("sent").hidden = shown >= cur.length;
+}
+
+function paintToggles(){
+  for(const b of document.querySelectorAll("button.lg"))
+    b.setAttribute("aria-pressed", String(active.has(+b.dataset.lv)));
+  el("reset").hidden = active.size === 4;
+}
+
+function render(raw){
+  const query = raw.trim();
+  const r = query ? search(raw) : {hits: ALL, mode: "browse"};
+  const hits = r.hits;
+  el("clr").hidden = !raw;
+  paintToggles();
+
+  if(query && !hits.length){
+    el("vcard").innerHTML = notFound(raw);
+    el("count").textContent = "";
+    el("list").innerHTML = ""; el("sent").hidden = true;
+    cur = []; shown = 0;
+    return;
+  }
+
+  /* The verdict answers "what level is this journal", and is taken from the
+     unfiltered matches on purpose. Switching a level off filters the list; it
+     must never change the answer, or turning off 0 would quietly convert a
+     level 0 journal into silence. */
+  let card = "";
+  if(query){
+    const qn = norm(raw), tied = AMBIG.get(qn) || [];
+    card = tied.length > 1 ? splitVerdict(qn, tied) : verdict(hits[0]);
+  }
+  el("vcard").innerHTML = card;
+
+  cur = hits.filter(j => active.has(j.l));
+  shown = 0;
+  el("list").innerHTML = "";
+  const hid = hits.length - cur.length;
+  const on = [3, 2, 1, 0].filter(l => active.has(l));
+
+  let line;
+  if(!on.length) line = "Every level is switched off, so the list is empty.";
+  else if(!query)
+    line = cur.length.toLocaleString("en-GB") +
+      (hid ? " of " + hits.length.toLocaleString("en-GB") : "") + " journals, sorted by title" +
+      (hid ? " \u2014 showing level " + on.join(", ") : "");
+  else
+    line = hits.length.toLocaleString("en-GB") + " match" + (hits.length === 1 ? "" : "es") +
+      (r.mode === "issn" ? " on that ISSN" : "") +
+      (r.fuzzyOnly ? " \u2014 nothing matched exactly, so these are close spellings" : "") +
+      (hid ? ", " + hid.toLocaleString("en-GB") + " hidden by the level filter" : "");
+  el("count").textContent = line;
+
+  el("sent").hidden = false;
+  grow();
+  /* The list was just replaced, so ask the observer to look again. */
+  window.dispatchEvent(new Event("kijl:list"));
+}
+
+const q = el("q");
 q.addEventListener("input", () => render(q.value));
-document.getElementById("clr").addEventListener("click", () => { q.value=""; render(""); q.focus(); });
+el("clr").addEventListener("click", () => { q.value = ""; render(""); q.focus(); });
+
+/* Delegated, because rows are appended as the list grows. */
+el("list").addEventListener("click", e => {
+  const b = e.target.closest(".row");
+  if(!b) return;
+  el("vcard").innerHTML = verdict(cur[+b.dataset.i]);
+  /* Move the marker rather than rewriting it on every row - the list can be
+     thousands of rows long by this point. */
+  const prev = el("list").querySelector('.row[aria-current="true"]');
+  if(prev) prev.removeAttribute("aria-current");
+  b.setAttribute("aria-current", "true");
+  el("vcard").scrollIntoView({block: "nearest", behavior: "smooth"});
+});
+
+for(const b of document.querySelectorAll("button.lg"))
+  b.addEventListener("click", () => {
+    const l = +b.dataset.lv;
+    if(active.has(l)) active.delete(l); else active.add(l);
+    render(q.value);
+  });
+el("reset").addEventListener("click", () => {
+  for(const l of [3, 2, 1, 0]) active.add(l);
+  render(q.value);
+});
+
+if(typeof IntersectionObserver === "function"){
+  /* Re-arming after each batch matters: an observer only fires when the
+     intersection state CHANGES, so if one batch is not tall enough to push the
+     sentinel back off screen the callback never comes again and the list stops
+     growing at a false bottom. Observing afresh delivers a new callback while
+     the sentinel is still in view. */
+  const io = new IntersectionObserver(e => {
+    if(!e[0].isIntersecting) return;
+    grow();
+    io.unobserve(el("sent"));
+    if(shown < cur.length) io.observe(el("sent"));
+  }, {rootMargin: "700px"});
+  io.observe(el("sent"));
+  window.addEventListener("kijl:list", () => { io.observe(el("sent")); });
+}
+
+render("");
 q.focus();
 
 /* Theme ------------------------------------------------------------------- */

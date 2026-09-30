@@ -119,5 +119,70 @@ t("every level in 0..3", () => J.every(j => [0,1,2,3].includes(j.l)) || "stray l
 t("every entry has a title", () => J.every(j => j.t && j.t.length) || "blank title");
 t("every entry has >=1 ISSN", () => J.every(j => j.k.size >= 1) || J.filter(j=>!j.k.size).length + " without");
 
+/* --- a journal must not lose its own name to a lookalike ----------------
+   The list is catalogued library-style, so a journal's own name is followed by
+   a colon and a descriptive subtitle. Matching the whole string and nothing
+   else meant the level 3 Journal of clinical oncology, which carries a long
+   subtitle, lost the tiebreak on title length to a level 0 journal called
+   "Journal of clinical oncology and research". Reporting a level 3 journal as
+   level 0 is the worst answer this page can give, so these are pinned. */
+t("exact name beats a longer-named lookalike", () =>
+  /^Journal of clinical oncology :/.test(top("Journal of clinical oncology")) ||
+  top("Journal of clinical oncology"));
+t("...and still does through a typo", () =>
+  /^Journal of clinical oncology :/.test(top("Jorunal of Clinical Oncology")) ||
+  top("Jorunal of Clinical Oncology"));
+t("a subtitled journal answers to its own name", () =>
+  /^Academic medicine :/.test(top("Academic medicine")) || top("Academic medicine"));
+t("a parallel-language name is searchable", () =>
+  /Angiology and vascular surgery/.test(top("Angiology and vascular surgery") || "") ||
+  top("Angiology and vascular surgery"));
+
+/* A one-letter tail is a series designator, not a subtitle: the ": X" journals
+   are separate companion titles, sometimes a level below their parent, and must
+   not be able to claim the parent's name. */
+for(const [q, want] of [["Journal of biomedical informatics", 2],
+                        ["International journal of pharmaceutics", 2],
+                        ["Veterinary parasitology", 2]])
+  t(`"${q}" is not answered by its ": X" companion`, () =>
+    (top(q) === q && lvl(q) === want) || `${top(q)} (level ${lvl(q)})`);
+t("a series designator stays part of the name", () =>
+  top("Acta physica Polonica: B") === "Acta physica Polonica: B" ||
+  top("Acta physica Polonica: B"));
+
+t("every subtitled journal wins its own name", () => {
+  const bad = [];
+  for(const j of J.filter(x => x.a.length > 1)){
+    const nm = j.a[1], h = search(nm).hits;
+    if(!h.length || (h[0].t !== j.t && !h[0].a.includes(nm))) bad.push(j.t);
+  }
+  return bad.length === 0 || `${bad.length} lost: ${bad.slice(0, 3).join(" | ")}`;
+});
+
+/* Sampled rather than exhaustive: all 6,855 take about a hundred seconds, and
+   the full sweep is worth running by hand after a change to the scoring. */
+t("a journal searched by its full title ranks first (every 23rd)", () => {
+  const bad = [];
+  for(let i = 0; i < J.length; i += 23){
+    const h = search(J[i].t).hits;
+    if(!h.length || (h[0].t !== J[i].t && h[0].n !== J[i].n)) bad.push(J[i].t);
+  }
+  return bad.length === 0 || `${bad.length} lost: ${bad.slice(0, 3).join(" | ")}`;
+});
+
+/* --- names shared across levels are never answered with one number ------ */
+t("Alzheimer's & dementia is flagged, not answered", () => {
+  const g = AMBIG.get("alzheimer s and dementia");
+  return (g && g.length === 3 && new Set(g.map(x => x.l)).size === 3) ||
+    "the three sibling journals are not grouped";
+});
+t("no name is left claimed by two levels", () => {
+  const by = new Map();
+  for(const j of J) for(const nm of j.a) (by.get(nm) || by.set(nm, []).get(nm)).push(j);
+  const loose = [...by].filter(([nm, g]) =>
+    new Set(g.map(x => x.t)).size > 1 && new Set(g.map(x => x.l)).size > 1 && !AMBIG.has(nm));
+  return loose.length === 0 || loose.map(x => x[0]).join(" | ");
+});
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
